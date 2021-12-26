@@ -57,7 +57,7 @@ AUTOTUNE = tf.data.AUTOTUNE
 def load_image(image_path):
     img = tf.io.read_file(image_path)
     img = tf.io.decode_jpeg(img, channels=IMG_C)
-    # img = prep_stage(img)
+    img = tf.image.resize_with_crop_or_pad(img, IMG_H, IMG_W)
     img = tf.cast(img, tf.float32)
 #     rescailing image from 0,255 to -1,1
     img = (img - 127.5) / 127.5
@@ -244,7 +244,7 @@ def build_generator(input_shape):
         num_filters=3,  ## Change this to 1 for grayscale.
         kernel_size=5,
         strides=1,
-        activation=False
+        activation=True
     )
     fake_output = tf.keras.layers.Activation("tanh")(x)
 
@@ -268,7 +268,7 @@ def build_discriminator():
         x = conv_block(x, num_filters=f[i] * filters, kernel_size=5, strides=2)
 
     x = tf.keras.layers.Flatten()(x)
-    x = tf.keras.layers.Dense(1)(x)
+    x = tf.keras.layers.Dense(1, activation='tanh')(x)
 
     return tf.keras.models.Model(image_input, x, name="discriminator")
 
@@ -288,35 +288,22 @@ def save_plot(examples, name_model, n):
     
 
 class DCGAN(tf.keras.models.Model):
-    def __init__(self, generator, discriminator):
+    def __init__(self, generator, discriminator, latent_dim):
         super(DCGAN, self).__init__()
         self.generator = generator
         self.discriminator = discriminator
+        self.latent_dim = latent_dim
        
         # Regularization Rate for each loss function
-        self.field_names = ['epoch', 'gen_loss', 'disc_loss']
         self.d_optimizer = tf.keras.optimizers.Adam(learning_rate=2e-6, beta_1=0.5, beta_2=0.999)
         self.g_optimizer = tf.keras.optimizers.Adam(learning_rate=2e-6, beta_1=0.5, beta_2=0.999)
     
     
-    def compile(self, g_optimizer, d_optimizer, filepath, loss_fn,resume=False):
+    def compile(self, g_optimizer, d_optimizer, filepath, loss_fn, resume=False):
         super(DCGAN, self).compile()
         self.g_optimizer = g_optimizer
         self.d_optimizer = d_optimizer
         self.loss_fn = loss_fn
-        
-        
-        logs = pd.DataFrame([], columns=self.field_names)
-
-        if not resume:
-            logs.to_csv(filepath, encoding='utf-8', index=False)
-        else:
-            fileExist = os.path.exists(filepath)
-            if not fileExist:
-                print("file not found. then we create new file")
-                logs.to_csv(filepath, encoding='utf-8', index=False)
-            
-
             
 # Notice the use of `tf.function`
 # This annotation causes the function to be "compiled".
@@ -358,7 +345,7 @@ class DCGAN(tf.keras.models.Model):
         return {
             "d1_loss": d1_loss, 
             "d2_loss": d2_loss, 
-            "g_loss": g_loss
+            "gen_loss": g_loss
         }
 
     def saved_model(self, gmodelpath, dmodelpath):
@@ -368,43 +355,6 @@ class DCGAN(tf.keras.models.Model):
     def loaded_model(self, g_filepath, d_filepath):
         self.generator.load_weights(g_filepath)
         self.discriminator.load_weights(d_filepath)
-        
-    # load and save data of training process
-    def load_save_processing(self,filepath, epoch_num, disc_loss, gen_loss, g_filepath, d_filepath, resume=False):
-        # columns name (epoch, gen_loss, disc_loss)
-
-        if resume:
-            # load logs data
-            logs = pd.read_csv(filepath)
-            logs.sort_values("epoch", ascending=False)
-            epoch = max(logs['epoch'].tolist(), default=0)
-            
-            epoch_list = logs['epoch'].tolist()
-            disc_loss = logs['disc_loss'].tolist()
-            gen_loss = logs['gen_loss'].tolist()
-            
-            
-            # load model data
-            self.loaded_model(g_filepath, d_filepath)
-            print(epoch, disc_loss, gen_loss)
-            return epoch, epoch_list, disc_loss, gen_loss
-        
-        else:
-            data={'epoch':epoch_num,'disc_loss':disc_loss,'gen_loss':gen_loss}
-            print("row added." , data)
-            f_object = open(filepath, "a+")
-            dwriter = DictWriter(f_object, fieldnames=self.field_names)
-            dwriter.writerow(data)
-            f_object.close()
-            return None, None, None, None
-        
-    def testing(self, g_filepath, latent_dim , n_samples=25):
-        noise = np.random.normal(size=(n_samples, latent_dim))
-        
-        g_model = self.generator.load_weights(g_filepath)
-        
-        examples = g_model.predict(noise)
-        save_plot(examples, epoch, int(np.sqrt(n_samples)))
 
 
 # In[ ]:
@@ -424,7 +374,8 @@ class CustomSaver(tf.keras.callbacks.Callback):
         self.name_model = name_model
         self.epochs_list = []
         self.gen_loss_list = []
-        self.disc_loss_list = []
+        self.disc_1_loss_list = []
+        self.disc_2_loss_list = []
         
     
     def on_train_begin(self, logs=None):
@@ -436,7 +387,8 @@ class CustomSaver(tf.keras.callbacks.Callback):
         self.model.saved_model(self.g_model_path, self.d_model_path)
         
         self.plot_epoch_result(self.epochs_list, self.gen_loss_list, "Generator_Loss", self.name_model, "g")
-        self.plot_epoch_result(self.epochs_list, self.disc_loss_list, "Discriminator_Loss", self.name_model, "r")
+        self.plot_epoch_result(self.epochs_list, self.disc_1_loss_list, "Discriminator_Loss_1", self.name_model, "r")
+        self.plot_epoch_result(self.epochs_list, self.disc_2_loss_list, "Discriminator_Loss_2", self.name_model, "r")
     
     def on_epoch_end(self, epoch, logs={}):
         logs = logs or {}
@@ -447,10 +399,9 @@ class CustomSaver(tf.keras.callbacks.Callback):
         
         self.epochs_list.append(epoch)
         self.gen_loss_list.append(logs["gen_loss"])
-        self.disc_loss_list.append(logs["disc_loss"])
+        self.disc_1_loss_list.append(logs["d1_loss"])
+        self.disc_2_loss_list.append(logs["d2_loss"])
         
-        
-        self.model.load_save_processing(logs_file, epoch, logs["disc_loss"], logs["gen_loss"], self.g_model_path, self.d_model_path, resume=False) 
         
         if (epoch + 1) % 15 == 0 or (epoch + 1) <= 15:
             self.model.saved_model(self.g_model_path, self.d_model_path)
@@ -509,21 +460,24 @@ def set_callbacks(name_model, logs_path, logs_file, path_gmodal, path_dmodal, st
 
 
 def run_trainning(model, train_dataset,num_epochs, path_gmodal, path_dmodal, logs_path, logs_file, name_model, steps, resume=False):
-    init_epoch = 0
+
     
     
     callbacks = set_callbacks(name_model, logs_path, logs_file, path_gmodal, path_dmodal, steps)
-    if resume:
-        print("resuming trainning. ", name_model)
-        skip_epoch, _, _, _ = model.load_save_processing(logs_file, num_epochs, [], [], path_gmodal, path_dmodal, resume=resume)
-        if skip_epoch < num_epochs:
-            init_epoch = skip_epoch
             
-    model.fit(train_dataset, epochs=num_epochs, callbacks=callbacks, initial_epoch=init_epoch)
+    model.fit(train_dataset, epochs=num_epochs, callbacks=callbacks)
+    
+def testing(model, g_filepath, latent_dim , name_model, n_samples=25):
+    noise = np.random.normal(size=(n_samples, latent_dim))
+
+    # g_model = model.load(g_filepath)
+    g_model = tf.keras.models.load_model(g_filepath)
+
+    examples = g_model.predict(noise)
+    save_plot(examples, name_model, int(np.sqrt(n_samples)))
 
 
 # In[ ]:
-
 
 
 if __name__ == "__main__":
@@ -539,8 +493,8 @@ if __name__ == "__main__":
     # run the function here
     """ Set Hyperparameters """
     
-    batch_size = 32
-    num_epochs = 2
+    batch_size = 128
+    num_epochs = 5
     latent_dim = 128
     name_model= str(IMG_H)+"_dc_gan_"+str(num_epochs)
     
@@ -550,7 +504,7 @@ if __name__ == "__main__":
     print("start: ", name_model)
     
     # set dir of files
-    train_images_path = "data/*.jpg"
+    train_images_path = "data_test/*.jpg"
     saved_model_path = "saved_model/"
     
     logs_path = "logs/"
@@ -582,15 +536,14 @@ if __name__ == "__main__":
 #     d_model.summary()
 #     g_model.summary()
     
-    resunetgan = DCGAN(g_model, d_model)
+    resunetgan = DCGAN(g_model, d_model, latent_dim)
     
-    bce_loss_fn = tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.1)
+    bce_loss_fn = tf.keras.losses.BinaryCrossentropy()
     g_optimizer = tf.keras.optimizers.Adam(learning_rate=lr, beta_1=0.5, beta_2=0.999)
     d_optimizer = tf.keras.optimizers.Adam(learning_rate=lr, beta_1=0.5, beta_2=0.999)
     
     resunetgan.compile(g_optimizer, d_optimizer, logs_file, bce_loss_fn, resume_trainning)
     
-#     print(train_images_dataset)
     """ run trainning process """
     train_images = glob(train_images_path)
     train_images_dataset = load_image_train(train_images, batch_size)
@@ -600,5 +553,11 @@ if __name__ == "__main__":
     steps = int(size_of_dataset/batch_size)
     run_trainning(resunetgan, train_images_dataset, num_epochs, path_gmodal, path_dmodal, logs_path, logs_file, name_model, steps,resume=resume_trainning)
     
-    resunetgan.testing(path_gmodal, latent_dim)
+    testing(g_model, path_gmodal, latent_dim, name_model)
+
+
+# In[ ]:
+
+
+
 
