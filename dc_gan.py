@@ -17,10 +17,6 @@
 
 import itertools
 import tensorflow as tf
-import tensorflow_addons as tfa
-import tensorflow_io as tfio
-
-import tf_clahe
 
 import numpy as np
 import pandas as pd 
@@ -34,10 +30,7 @@ from datetime import datetime
 # Import writer class from csv module
 from csv import DictWriter
 
-from sklearn.metrics import roc_curve, auc, precision_score, recall_score, f1_score
-
 from matplotlib import pyplot as plt
-import matplotlib.patches as mpatches
 
 IMG_H = 64
 IMG_W = 64
@@ -87,97 +80,6 @@ def load_image_train(filename, batch_size):
     pixels = tf_dataset(filename, batch_size)
     
     return pixels
-
-
-# In[ ]:
-
-
-def plot_roc_curve(fpr, tpr, name_model):
-    plt.plot(fpr, tpr, color='orange', label='ROC')
-    plt.plot([0, 1], [0, 1], color='darkblue', linestyle='--')
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('Receiver Operating Characteristic (ROC) Curve')
-    plt.legend()
-    plt.savefig(name_model+'_roc_curve.png')
-    plt.show()
-    plt.clf()
-    
-
-
-''' calculate the auc value for lables and scores'''
-def roc(labels, scores, name_model):
-    """Compute ROC curve and ROC area for each class"""
-    roc_auc = dict()
-    # True/False Positive Rates.
-    fpr, tpr, threshold = roc_curve(labels, scores)
-    print("threshold: ", threshold)
-    roc_auc = auc(fpr, tpr)
-    # get a threshod that perform very well.
-    optimal_idx = np.argmax(tpr - fpr)
-    optimal_threshold = threshold[optimal_idx]
-    # draw plot for ROC-Curve
-    plot_roc_curve(fpr, tpr, name_model)
-    
-    return roc_auc, optimal_threshold
-
-def plot_loss_with_rlabel(x_value, y_value, real_label, name_model, prefix, label_axis=["x_label", "y_label"]):
-    # 'bo-' means blue color, round points, solid lines
-    colours = ["blue" if x == 1.0 else "red" for x in real_label]
-    plt.scatter(x_value, y_value, label='loss_value',c = colours)
-#     plt.rcParams["figure.figsize"] = (50,3)
-    # Set a title of the current axes.
-    plt.title(prefix + "_" + name_model)
-    # show a legend on the plot
-    red_patch = mpatches.Patch(color='red', label='Normal Display')
-    blue_patch = mpatches.Patch(color='blue', label='Defect Display')
-    plt.legend(handles=[red_patch, blue_patch])
-    # Display a figure.
-    plt.ylabel(label_axis[0])
-    plt.xlabel(label_axis[1])
-    plt.savefig(name_model + "_" + prefix +'_rec_feat_rlabel.png')
-    plt.show()
-    plt.clf()
-
-
-# In[ ]:
-
-
-def plot_confusion_matrix(cm, classes,
-                        normalize=False,
-                        title='Confusion matrix',
-                        cmap=plt.cm.Blues):
-    """
-    This function prints and plots the confusion matrix.
-    Normalization can be applied by setting `normalize=True`.
-    """
-    plt.imshow(cm, interpolation='nearest', cmap=cmap)
-    plt.title(title)
-    plt.colorbar()
-    tick_marks = np.arange(len(classes))
-    plt.xticks(tick_marks, classes, rotation=45)
-    plt.yticks(tick_marks, classes)
-
-    if normalize:
-        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-        print("Normalized confusion matrix")
-    else:
-        print('Confusion matrix, without normalization')
-
-    print(cm)
-
-    thresh = cm.max() / 2.
-    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
-        plt.text(j, i, cm[i, j],
-            horizontalalignment="center",
-            color="white" if cm[i, j] > thresh else "black")
-
-    plt.tight_layout()
-    plt.ylabel('True label')
-    plt.xlabel('Predicted label')
-    plt.savefig(title+'_cm.png')
-    plt.show()
-    plt.clf()
 
 
 # In[ ]:
@@ -244,7 +146,7 @@ def build_generator(input_shape):
         num_filters=3,  ## Change this to 1 for grayscale.
         kernel_size=5,
         strides=1,
-        activation=True
+        activation=False
     )
     fake_output = tf.keras.layers.Activation("tanh")(x)
 
@@ -494,7 +396,7 @@ if __name__ == "__main__":
     """ Set Hyperparameters """
     
     batch_size = 128
-    num_epochs = 5
+    num_epochs = 1000
     latent_dim = 128
     name_model= str(IMG_H)+"_dc_gan_"+str(num_epochs)
     
@@ -504,7 +406,7 @@ if __name__ == "__main__":
     print("start: ", name_model)
     
     # set dir of files
-    train_images_path = "data_test/*.jpg"
+    train_images_path = "data/*.jpg"
     saved_model_path = "saved_model/"
     
     logs_path = "logs/"
