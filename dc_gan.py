@@ -94,15 +94,12 @@ def generator_loss(fake_output):
     # we're trying to fool discriminator
     return cross_entropy(tf.ones_like(fake_output),fake_output)
 
-gen_optimizer = tf.keras.optimizers.Adam(lr=1e-4)
 
 def discriminator_loss(real_images,fake_images):
     real_loss = cross_entropy(tf.ones_like(real_images),real_images)
     fake_loss = cross_entropy(tf.zeros_like(fake_images),fake_images)
     total_loss = real_loss + fake_loss
     return total_loss
-
-discriminator_optimizer = tf.keras.optimizers.Adam(lr=1e-4)
 
 
 # In[ ]:
@@ -199,8 +196,8 @@ class DCGAN(tf.keras.models.Model):
         self.batch_size = batch_size
        
         # Regularization Rate for each loss function
-        self.d_optimizer = tf.keras.optimizers.Adam(learning_rate=2e-6, beta_1=0.5, beta_2=0.999)
-        self.g_optimizer = tf.keras.optimizers.Adam(learning_rate=2e-6, beta_1=0.5, beta_2=0.999)
+        self.d_optimizer = tf.keras.optimizers.Adam(learning_rate=1e-5, beta_1=0.5, beta_2=0.999)
+        self.g_optimizer = tf.keras.optimizers.Adam(learning_rate=1e-5, beta_1=0.5, beta_2=0.999)
     
     
     def compile(self, g_optimizer, d_optimizer, filepath, loss_fn, resume=False):
@@ -344,7 +341,7 @@ def set_callbacks(name_model, logs_path, logs_file, path_gmodal, path_dmodal, st
 #         checkpoints_callback,
         tensorboard_callback,
 #         lr_callback,
-        reduce_lr,
+        # reduce_lr,
     ]
     return callbacks
 
