@@ -327,8 +327,8 @@ def set_callbacks(name_model, logs_path, logs_file, path_gmodal, path_dmodal, st
     
     lr_callback = tf.keras.callbacks.LearningRateScheduler(scheduler)
     
-    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='disc_loss', factor=0.2,
-                              patience=7, min_lr=0.000001)
+    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='gen_loss', factor=0.2,
+                              patience=3, min_lr=0.00000001)
     
     tensorboard_callback = tf.keras.callbacks.TensorBoard(
         log_dir=logs_path + name_model + "/" + datetime.now().strftime("%Y%m%d-%H%M%S"), 
@@ -341,7 +341,7 @@ def set_callbacks(name_model, logs_path, logs_file, path_gmodal, path_dmodal, st
 #         checkpoints_callback,
         tensorboard_callback,
 #         lr_callback,
-        # reduce_lr,
+        reduce_lr,
     ]
     return callbacks
 
@@ -383,7 +383,7 @@ if __name__ == "__main__":
     # run the function here
     """ Set Hyperparameters """
     
-    batch_size = 64
+    batch_size = 128
     num_epochs = 150
     latent_dim = 100
     name_model= str(IMG_H)+"_dc_gan_"+str(num_epochs)
