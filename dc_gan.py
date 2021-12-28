@@ -32,8 +32,8 @@ from csv import DictWriter
 
 from matplotlib import pyplot as plt
 
-IMG_H = 256
-IMG_W = 256
+IMG_H = 64
+IMG_W = 64
 IMG_C = 3  ## Change this to 1 for grayscale.
 
 print("TensorFlow version: ", tf.keras.__version__)
@@ -113,37 +113,41 @@ def build_generator(input_shape):
     model = tf.keras.Sequential()
     
     # Random noise to 16x16x256 image
-    model.add(tf.keras.layers.Dense(16*16*256,use_bias=False,input_shape=input_shape))
-    model.add(tf.keras.layers.BatchNormalization())
-    model.add(tf.keras.layers.LeakyReLU())
-    model.add(tf.keras.layers.Reshape((16,16,256)))
-    
-    assert model.output_shape == (None,16,16,256)
-    
-    model.add(tf.keras.layers.Conv2DTranspose(128,(5,5),strides=(2,2),use_bias=False,padding="same",kernel_initializer=WEIGHT_INIT))
+    # model.add(tf.keras.layers.Dense(1024, activation="relu", use_bias=False, input_shape=input_shape))
+    model.add(tf.keras.layers.Dense(4*4*512, input_shape=input_shape))
+    model.add(tf.keras.layers.Reshape([4,4,512]))
     model.add(tf.keras.layers.BatchNormalization())
     model.add(tf.keras.layers.LeakyReLU())
     
-    assert model.output_shape == (None,32,32,128)
     
-    model.add(tf.keras.layers.Conv2DTranspose(128,(5,5),strides=(2,2),use_bias=False,padding="same",kernel_initializer=WEIGHT_INIT))
+    model.add(tf.keras.layers.Conv2DTranspose(256, (2,2),strides=(2,2),use_bias=False,padding="same", kernel_initializer=WEIGHT_INIT))
+    # model.add(tf.keras.layers.Conv2D(128, (1,1),strides=(2,2), use_bias=False, padding="same", kernel_initializer=WEIGHT_INIT))
     model.add(tf.keras.layers.BatchNormalization())
     model.add(tf.keras.layers.LeakyReLU())
     
-    assert model.output_shape == (None,64,64,128)
+  
     
-    model.add(tf.keras.layers.Conv2DTranspose(64,(5,5),strides=(2,2),use_bias=False,padding="same",kernel_initializer=WEIGHT_INIT))
-    model.add(tf.keras.layers.BatchNormalization())
+    model.add(tf.keras.layers.Conv2DTranspose(128, (2,2),strides=(2,2),use_bias=False,padding="same", kernel_initializer=WEIGHT_INIT))
+    # model.add(tf.keras.layers.Conv2D(64, (1,1),strides=(2,2), use_bias=False, padding="same", kernel_initializer=WEIGHT_INIT))
+    # model.add(tf.keras.layers.BatchNormalization())
     model.add(tf.keras.layers.LeakyReLU())
+    model.add(tf.keras.layers.BatchNormalization())
     
-    assert model.output_shape == (None,128,128,64)
     
-    model.add(tf.keras.layers.Conv2DTranspose(3,(5,5),strides=(2,2),use_bias=False,padding="same",kernel_initializer=WEIGHT_INIT,
+    
+    model.add(tf.keras.layers.Conv2DTranspose(64, (2,2), strides=(2,2),use_bias=False,padding="same", kernel_initializer=WEIGHT_INIT))
+    # model.add(tf.keras.layers.Conv2D(32, (1,1),strides=(2,2), use_bias=False, padding="same", kernel_initializer=WEIGHT_INIT))
+    model.add(tf.keras.layers.LeakyReLU())
+    model.add(tf.keras.layers.BatchNormalization())
+    
+    
+    model.add(tf.keras.layers.Conv2DTranspose(3, (1,1), strides=(2,2),use_bias=False,padding="same",kernel_initializer=WEIGHT_INIT,
                                      activation="tanh"
                                     ))
               # Tanh activation function compress values between -1 and 1. 
               # This is why we compressed our images between -1 and 1 in readImage function.
-    assert model.output_shape == (None,256,256,3)
+    # assert model.output_shape == (None,128,128,3)
+    
     return model
 
 
@@ -158,16 +162,16 @@ def build_discriminator(input_shape):
     model.add(tf.keras.layers.LeakyReLU())
     model.add(tf.keras.layers.Dropout(0.3))
     
+    model.add(tf.keras.layers.Conv2D(64,(5,5),strides=(2,2),padding="same"))
+    model.add(tf.keras.layers.LeakyReLU())
+    model.add(tf.keras.layers.Dropout(0.3))
+    
     model.add(tf.keras.layers.Conv2D(128,(5,5),strides=(2,2),padding="same"))
     model.add(tf.keras.layers.LeakyReLU())
     model.add(tf.keras.layers.Dropout(0.3))
     
-    model.add(tf.keras.layers.Conv2D(265,(5,5),strides=(2,2),padding="same"))
-    model.add(tf.keras.layers.LeakyReLU())
-    model.add(tf.keras.layers.Dropout(0.3))
-    
     model.add(tf.keras.layers.Flatten())
-    model.add(tf.keras.layers.Dense(1))
+    model.add(tf.keras.layers.Dense(1, activation="tanh"))
     
     return model
 
@@ -211,10 +215,11 @@ class DCGAN(tf.keras.models.Model):
     def train_step(self, images):
         # We've created random seeds
         noise = tf.random.normal([self.batch_size, self.latent_dim])
+        
 
         with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
             # Generator generated images
-            generated_images = self.generator(noise,training=True)
+            generated_images = self.generator(noise, training=True)
 
             # We've sent our real and fake images to the discriminator
             # and taken the decisions of it.
@@ -381,7 +386,7 @@ if __name__ == "__main__":
     # run the function here
     """ Set Hyperparameters """
     
-    batch_size = 128
+    batch_size = 64
     num_epochs = 150
     latent_dim = 100
     name_model= str(IMG_H)+"_dc_gan_"+str(num_epochs)
