@@ -73,18 +73,6 @@ def tf_dataset(images_path, batch_size, labels=False, class_names=None):
 # In[ ]:
 
 
-# load image dataset for trainnig without labels
-def load_image_train(filename, batch_size):
-	# load image with the preferred size
-    
-    pixels = tf_dataset(filename, batch_size)
-    
-    return pixels
-
-
-# In[ ]:
-
-
 # we'll use cross entropy loss
 cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 
@@ -112,19 +100,20 @@ def build_generator(input_shape):
     # Random noise to 16x16x256 image
     # model.add(tf.keras.layers.Dense(1024, activation="relu", use_bias=False, input_shape=input_shape))
     model.add(tf.keras.layers.Dense(4*4*512, input_shape=input_shape))
-    model.add(tf.keras.layers.Reshape([4,4,512]))
+    
     model.add(tf.keras.layers.BatchNormalization())
     model.add(tf.keras.layers.LeakyReLU())
+    model.add(tf.keras.layers.Reshape([4,4,512]))
     
     
-    model.add(tf.keras.layers.Conv2DTranspose(256, (2,2),strides=(2,2),use_bias=False,padding="same", kernel_initializer=WEIGHT_INIT))
+    model.add(tf.keras.layers.Conv2DTranspose(256, (5,5),strides=(2,2),use_bias=False,padding="same", kernel_initializer=WEIGHT_INIT))
     # model.add(tf.keras.layers.Conv2D(128, (1,1),strides=(2,2), use_bias=False, padding="same", kernel_initializer=WEIGHT_INIT))
     model.add(tf.keras.layers.BatchNormalization())
     model.add(tf.keras.layers.LeakyReLU())
     
   
     
-    model.add(tf.keras.layers.Conv2DTranspose(128, (2,2),strides=(2,2),use_bias=False,padding="same", kernel_initializer=WEIGHT_INIT))
+    model.add(tf.keras.layers.Conv2DTranspose(128, (5,5),strides=(2,2),use_bias=False,padding="same", kernel_initializer=WEIGHT_INIT))
     # model.add(tf.keras.layers.Conv2D(64, (1,1),strides=(2,2), use_bias=False, padding="same", kernel_initializer=WEIGHT_INIT))
     # model.add(tf.keras.layers.BatchNormalization())
     model.add(tf.keras.layers.LeakyReLU())
@@ -132,13 +121,13 @@ def build_generator(input_shape):
     
     
     
-    model.add(tf.keras.layers.Conv2DTranspose(64, (2,2), strides=(2,2),use_bias=False,padding="same", kernel_initializer=WEIGHT_INIT))
+    model.add(tf.keras.layers.Conv2DTranspose(64, (5,5), strides=(2,2),use_bias=False,padding="same", kernel_initializer=WEIGHT_INIT))
     # model.add(tf.keras.layers.Conv2D(32, (1,1),strides=(2,2), use_bias=False, padding="same", kernel_initializer=WEIGHT_INIT))
     model.add(tf.keras.layers.LeakyReLU())
     model.add(tf.keras.layers.BatchNormalization())
     
     
-    model.add(tf.keras.layers.Conv2DTranspose(3, (1,1), strides=(2,2),use_bias=False,padding="same",kernel_initializer=WEIGHT_INIT,
+    model.add(tf.keras.layers.Conv2DTranspose(3, (5,5), strides=(2,2),use_bias=False,padding="same",kernel_initializer=WEIGHT_INIT,
                                      activation="tanh"
                                     ))
               # Tanh activation function compress values between -1 and 1. 
@@ -159,16 +148,20 @@ def build_discriminator(input_shape):
     model.add(tf.keras.layers.LeakyReLU())
     model.add(tf.keras.layers.Dropout(0.3))
     
-    model.add(tf.keras.layers.Conv2D(64,(5,5),strides=(2,2),padding="same"))
-    model.add(tf.keras.layers.LeakyReLU())
-    model.add(tf.keras.layers.Dropout(0.3))
-    
     model.add(tf.keras.layers.Conv2D(128,(5,5),strides=(2,2),padding="same"))
     model.add(tf.keras.layers.LeakyReLU())
     model.add(tf.keras.layers.Dropout(0.3))
     
+    model.add(tf.keras.layers.Conv2D(256,(5,5),strides=(2,2),padding="same"))
+    model.add(tf.keras.layers.LeakyReLU())
+    model.add(tf.keras.layers.Dropout(0.3))
+    
+    model.add(tf.keras.layers.Conv2D(512,(5,5),strides=(2,2),padding="same"))
+    model.add(tf.keras.layers.LeakyReLU())
+    model.add(tf.keras.layers.Dropout(0.3))
+    
     model.add(tf.keras.layers.Flatten())
-    model.add(tf.keras.layers.Dense(1, activation="tanh"))
+    model.add(tf.keras.layers.Dense(1))
     
     return model
 
@@ -176,13 +169,13 @@ def build_discriminator(input_shape):
 # In[ ]:
 
 
-def save_plot(examples, name_model, n):
+def save_plot(examples, epoch, n):
     examples = (examples + 1) / 2.0
     for i in range(n * n):
         plt.subplot(n, n, i+1)
         plt.axis("off")
         plt.imshow(examples[i])  ## pyplot.imshow(np.squeeze(examples[i], axis=-1))
-    filename = f"samples/generated_plot-{name_model}.png"
+    filename = f"samples/generated_plot_epoch-{epoch}.png"
     plt.savefig(filename)
     plt.close()
     
@@ -200,11 +193,10 @@ class DCGAN(tf.keras.models.Model):
         self.g_optimizer = tf.keras.optimizers.Adam(learning_rate=1e-5, beta_1=0.5, beta_2=0.999)
     
     
-    def compile(self, g_optimizer, d_optimizer, filepath, loss_fn, resume=False):
+    def compile(self, g_optimizer, d_optimizer):
         super(DCGAN, self).compile()
         self.g_optimizer = g_optimizer
         self.d_optimizer = d_optimizer
-        self.loss_fn = loss_fn
             
 # Notice the use of `tf.keras.function`
 # This annotation causes the function to be "compiled".
@@ -240,123 +232,9 @@ class DCGAN(tf.keras.models.Model):
         }
 
 
-    def saved_model(self, gmodelpath, dmodelpath):
-        self.generator.save(gmodelpath)
-        self.discriminator.save(dmodelpath)
-
-    def loaded_model(self, g_filepath, d_filepath):
-        self.generator.load_weights(g_filepath)
-        self.discriminator.load_weights(d_filepath)
-
-
 # In[ ]:
 
 
-class CustomSaver(tf.keras.callbacks.Callback):
-    def __init__(self,
-                 g_model_path,
-                 d_model_path,
-                 logs_file,
-                 name_model
-                ):
-        super(CustomSaver, self).__init__()
-        self.g_model_path = g_model_path
-        self.d_model_path = d_model_path
-        self.logs_file = logs_file
-        self.name_model = name_model
-        self.epochs_list = []
-        self.gen_loss_list = []
-        self.disc_loss_list = []
-        
-    
-    def on_train_begin(self, logs=None):
-        if not hasattr(self, 'epoch'):
-            self.epoch = []
-            self.history = {}
-            
-    def on_train_end(self, logs=None):
-        self.model.saved_model(self.g_model_path, self.d_model_path)
-        
-        self.plot_epoch_result(self.epochs_list, self.gen_loss_list, "Generator_Loss", self.name_model, "g")
-        self.plot_epoch_result(self.epochs_list, self.disc_loss_list, "Discriminator_Loss", self.name_model, "r")
-    
-    def on_epoch_end(self, epoch, logs={}):
-        logs = logs or {}
-        self.epoch.append(epoch)
-        for k, v in logs.items():
-#             print(k, v)
-            self.history.setdefault(k, []).append(v)
-        
-        self.epochs_list.append(epoch)
-        self.gen_loss_list.append(logs["gen_loss"])
-        self.disc_loss_list.append(logs["disc_loss"])
-
-        
-        
-        if (epoch + 1) % 15 == 0 or (epoch + 1) <= 15:
-            self.model.saved_model(self.g_model_path, self.d_model_path)
-            print('saved for epoch',epoch + 1)
-            
-    def plot_epoch_result(self, epochs, loss, name, model_name, colour):
-        plt.plot(epochs, loss, colour, label=name)
-    #     plt.plot(epochs, disc_loss, 'b', label='Discriminator loss')
-        plt.title(name)
-        plt.xlabel('Epochs')
-        plt.ylabel('Loss')
-        plt.legend()
-        plt.savefig(model_name+ '_'+name+'_epoch_result.png')
-        plt.show()
-        plt.clf()
-
-        
-def scheduler(epoch, lr):
-    if epoch < 1500:
-        return lr
-    else:
-        return lr * tf.keras.math.exp(-0.1)
-
-def set_callbacks(name_model, logs_path, logs_file, path_gmodal, path_dmodal, steps):
-    # create and use callback:
-    
-    saver_callback = CustomSaver(
-        path_gmodal,
-        path_dmodal,
-        logs_file,
-        name_model
-    )
-    
-    lr_callback = tf.keras.callbacks.LearningRateScheduler(scheduler)
-    
-    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='gen_loss', factor=0.2,
-                              patience=3, min_lr=0.00000001)
-    
-    tensorboard_callback = tf.keras.callbacks.TensorBoard(
-        log_dir=logs_path + name_model + "/" + datetime.now().strftime("%Y%m%d-%H%M%S"), 
-        histogram_freq=1
-    )
-    
-
-    callbacks = [
-        saver_callback,
-#         checkpoints_callback,
-        tensorboard_callback,
-#         lr_callback,
-        reduce_lr,
-    ]
-    return callbacks
-
-
-# In[ ]:
-
-
-def run_trainning(model, train_dataset,num_epochs, path_gmodal, path_dmodal, logs_path, logs_file, name_model, steps, resume=False):
-
-    
-    
-    callbacks = set_callbacks(name_model, logs_path, logs_file, path_gmodal, path_dmodal, steps)
-            
-    model.fit(train_dataset, epochs=num_epochs, callbacks=callbacks)
-    
 def testing(model, g_filepath, latent_dim , name_model, n_samples=25):
     noise = np.random.normal(size=(n_samples, latent_dim))
 
@@ -389,7 +267,7 @@ if __name__ == "__main__":
     name_model= str(IMG_H)+"_dc_gan_"+str(num_epochs)
     
     resume_trainning = False
-    lr = 1e-5
+    lr = 1e-4
     
     print("start: ", name_model)
     
@@ -426,24 +304,33 @@ if __name__ == "__main__":
 #     d_model.summary()
 #     g_model.summary()
     
-    resunetgan = DCGAN(g_model, d_model, latent_dim, batch_size)
+    dcgan = DCGAN(g_model, d_model, latent_dim, batch_size)
     
     bce_loss_fn = tf.keras.losses.BinaryCrossentropy()
     g_optimizer = tf.keras.optimizers.Adam(learning_rate=lr, beta_1=0.5, beta_2=0.999)
     d_optimizer = tf.keras.optimizers.Adam(learning_rate=lr, beta_1=0.5, beta_2=0.999)
     
-    resunetgan.compile(g_optimizer, d_optimizer, logs_file, bce_loss_fn, resume_trainning)
+    dcgan.compile(g_optimizer, d_optimizer)
     
     """ run trainning process """
     train_images = glob(train_images_path)
-    train_images_dataset = load_image_train(train_images, batch_size)
-    train_images_dataset = train_images_dataset.cache().prefetch(buffer_size=AUTOTUNE)
-    size_of_dataset = len(list(train_images_dataset)) * batch_size
+    train_images_dataset = tf_dataset(train_images, batch_size)
     
-    steps = int(size_of_dataset/batch_size)
-    run_trainning(resunetgan, train_images_dataset, num_epochs, path_gmodal, path_dmodal, logs_path, logs_file, name_model, steps,resume=resume_trainning)
+    for epoch in range(num_epochs):
+        epoch = epoch + 1
+        print("epoch: ", epoch)
+        dcgan.fit(train_images_dataset, epochs=1)
+        if epoch % 25 == 0:
+            print("saved at epoch: ", epoch)
+            g_model.save(path_gmodal)
+            d_model.save(path_dmodal)
+
+            n_samples = 25
+            noise = np.random.normal(size=(n_samples, latent_dim))
+            examples = g_model.predict(noise)
+            save_plot(examples, epoch, int(np.sqrt(n_samples)))
     
-    testing(g_model, path_gmodal, latent_dim, name_model)
+    # testing(g_model, path_gmodal, latent_dim, name_model)
 
 
 # In[ ]:
