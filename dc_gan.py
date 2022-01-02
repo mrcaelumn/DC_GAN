@@ -41,7 +41,7 @@ assert version.parse(tf.keras.__version__).release[0] >= 2,     "This notebook r
 
 # Weight initializers for the Generator network
 WEIGHT_INIT = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.2)
-AUTOTUNE = tf.data.AUTOTUNE
+dAUTOTUNE = tf.data.AUTOTUNE
 
 
 # In[ ]:
@@ -50,11 +50,11 @@ AUTOTUNE = tf.data.AUTOTUNE
 def load_image(image_path):
     img = tf.io.read_file(image_path)
     img = tf.io.decode_jpeg(img, channels=IMG_C)
-    img = tf.image.resize_with_crop_or_pad(img, IMG_H, IMG_W)
+    img = tf.image.central_crop(img, 0.5)
+    img = tf.image.resize(img, (IMG_H, IMG_W))
     img = tf.cast(img, tf.float32)
 #     rescailing image from 0,255 to -1,1
     img = (img - 127.5) / 127.5
-    
     return img
 
 
@@ -74,7 +74,7 @@ def tf_dataset(images_path, batch_size, labels=False, class_names=None):
 
 
 # we'll use cross entropy loss
-cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
+cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.1)
 
 def generator_loss(fake_output):
     # First argument of loss is real labels
