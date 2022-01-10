@@ -47,6 +47,26 @@ dAUTOTUNE = tf.data.AUTOTUNE
 # In[ ]:
 
 
+class GCAdam(tf.keras.optimizers.Adam):
+    def get_gradients(self, loss, params):
+        # We here just provide a modified get_gradients() function since we are
+        # trying to just compute the centralized gradients.
+
+        grads = []
+        gradients = super().get_gradients()
+        for grad in gradients:
+            grad_len = len(grad.shape)
+            if grad_len > 1:
+                axis = list(range(grad_len - 1))
+                grad -= tf.reduce_mean(grad, axis=axis, keep_dims=True)
+            grads.append(grad)
+
+        return grads
+
+
+# In[ ]:
+
+
 def load_image(image_path):
     img = tf.io.read_file(image_path)
     img = tf.io.decode_jpeg(img, channels=IMG_C)
@@ -262,8 +282,8 @@ if __name__ == "__main__":
     """ Set Hyperparameters """
     
     batch_size = 128
-    num_epochs = 150
-    latent_dim = 100
+    num_epochs = 1000
+    latent_dim = 128
     name_model= str(IMG_H)+"_dc_gan_"+str(num_epochs)
     
     resume_trainning = False
@@ -307,8 +327,8 @@ if __name__ == "__main__":
     dcgan = DCGAN(g_model, d_model, latent_dim, batch_size)
     
     bce_loss_fn = tf.keras.losses.BinaryCrossentropy()
-    g_optimizer = tf.keras.optimizers.Adam(learning_rate=lr, beta_1=0.5, beta_2=0.999)
-    d_optimizer = tf.keras.optimizers.Adam(learning_rate=lr, beta_1=0.5, beta_2=0.999)
+    g_optimizer = GCAdam(learning_rate=lr, beta_1=0.5, beta_2=0.999)
+    d_optimizer = GCAdam(learning_rate=lr, beta_1=0.5, beta_2=0.999)
     
     dcgan.compile(g_optimizer, d_optimizer)
     
@@ -330,7 +350,7 @@ if __name__ == "__main__":
             examples = g_model.predict(noise)
             save_plot(examples, epoch, int(np.sqrt(n_samples)))
     
-    # testing(g_model, path_gmodal, latent_dim, name_model)
+    testing(g_model, path_gmodal, latent_dim, name_model)
 
 
 # In[ ]:
